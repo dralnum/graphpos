@@ -19,6 +19,6 @@ User.init(
   { sequelize: Sequelize, modelName: "user" }
 );
 
-RegisteredTime.associate();
+User.associate();
 
 module.exports = User;

@@ -1,12 +1,11 @@
 const { Model, DataTypes } = require("sequelize");
 const Sequelize = require("../database");
-const Writer = require("./writer");
 
 class RegisteredTime extends Model {}
 
 RegisteredTime.init(
   {
-    registered_time: DataTypes.DATETIME
+    registered_time: DataTypes.STRING
   },
   { sequelize: Sequelize, modelName: "registered_time" }
 );
