@@ -37,7 +37,7 @@ const typeDefs = gql`
   type Mutation {
     createUser(data: CreateUserInput): User
     updateUser(id: ID!, data: UpdateUserInput): User
-    deleteUser(id: ID!): Boolean
+    deleteUser(id: ID!): Boolean @auth(role: ADMIN)
     createRegisteredTime(data: CreateRegisteredTimeInput): RegisteredTime
       @auth(role: USER)
 
@@ -49,6 +49,10 @@ const typeDefs = gql`
     user: User!
   }
 
+  type Subscription {
+    onCreatedRT: RegisteredTime
+  }
+
   input CreateUserInput {
     name: String!
     email: String!
@@ -58,22 +62,18 @@ const typeDefs = gql`
   input UpdateUserInput {
     name: String!
     email: String!
-    password: String!
-    role: RoleEnum!
+    password: String
+    role: RoleEnum
   }
   input CreateRegisteredTimeInput {
-    user: CreateUserInput!
-    registered_time: String!
-  }
-  input UpdateRegisteredTimeInput {
-    registered_time: String
+    user: ID!
   }
 `;
 
 const resolver = {
   Query: {
     allUsers() {
-      return users.findAll({ include: [RegisteredTime] });
+      return User.findAll({ include: [RegisteredTime] });
     }
   },
   Mutation: {
@@ -102,6 +102,20 @@ const resolver = {
       await user.destroy();
       return true;
     },
+    async createRegisteredTime(parent, body, context, info) {
+      const user = await User.findOne({
+        where: { id: body.user }
+      });
+      const registered_time = await RegisteredTime.create({
+        registered_time: "2019-11-09 11:00:00"
+      });
+      await registered_time.setUser(body.user);
+      const newRT = await registered_time.reload({ include: [User] });
+      pubSub.publish("createdRT", {
+        onCreatedRT: newRT
+      });
+      return newBook;
+    },
 
     async signin(parent, body, context, info) {
       const user = await User.findOne({
@@ -122,6 +136,11 @@ const resolver = {
         };
       }
     }
+  },
+  Subscription: {
+    onCreatedRT: {
+      subscribe: () => pubSub.asyncIterator("createdRT")
+    }
   }
 };
 
@@ -131,10 +150,19 @@ const server = new ApolloServer({
   schemaDirectives: {
     auth: AuthDirective
   },
-  context({ req }) {
-    return {
-      headers: req.headers
-    };
+  context({ req, connection }) {
+    if (connection) {
+      return connection.context;
+    }
+    // const token = req.headers.authorization;
+    // console.log(token);
+    // const jwtData = jwt.decode(token.replace("Bearer ", ""));
+
+    // const { id } = jwtData;
+    // return {
+    //   headers: req.headers,
+    //   user_id: id
+    // };
   }
 });
 
