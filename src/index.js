@@ -32,7 +32,7 @@ const typeDefs = gql`
   type Query {
     allUsers: [User]
     user(id: ID!): User
-    allRegisteredTime: [RegisteredTime]
+    allRegisteredTime: [RegisteredTime] @auth(role: ADMIN)
   }
   type Mutation {
     createUser(data: CreateUserInput): User
@@ -40,6 +40,7 @@ const typeDefs = gql`
     deleteUser(id: ID!): Boolean @auth(role: ADMIN)
     createRegisteredTime(data: CreateRegisteredTimeInput): RegisteredTime
       @auth(role: USER)
+    deleteRegisteredTime(id: ID!): Boolean @auth(role: ADMIN)
 
     signin(email: String!, password: String!): PayloadAuth
   }
@@ -73,7 +74,10 @@ const typeDefs = gql`
 const resolver = {
   Query: {
     allUsers() {
-      return User.findAll({ include: [RegisteredTime] });
+      return User.findAll();
+    },
+    allRegisteredTime() {
+      return RegisteredTime.findAll({ include: [User] });
     }
   },
   Mutation: {
@@ -103,18 +107,28 @@ const resolver = {
       return true;
     },
     async createRegisteredTime(parent, body, context, info) {
-      const user = await User.findOne({
-        where: { id: body.user }
-      });
+      var datetime = new Date()
+        .toISOString()
+        .replace(/T/, " ")
+        .slice(0, 19);
+      console.log(datetime);
       const registered_time = await RegisteredTime.create({
-        registered_time: "2019-11-09 11:00:00"
+        registered_time: datetime
       });
-      await registered_time.setUser(body.user);
+      console.log(body.data.user);
+      await registered_time.setUser(body.data.user);
       const newRT = await registered_time.reload({ include: [User] });
       pubSub.publish("createdRT", {
         onCreatedRT: newRT
       });
       return newRT;
+    },
+    async deleteRegisteredTime(parent, body, context, info) {
+      const registered_time = await RegisteredTime.findOne({
+        where: { id: body.id }
+      });
+      await registered_time.destroy();
+      return true;
     },
 
     async signin(parent, body, context, info) {
@@ -154,15 +168,9 @@ const server = new ApolloServer({
     if (connection) {
       return connection.context;
     }
-    // const token = req.headers.authorization;
-    // console.log(token);
-    // const jwtData = jwt.decode(token.replace("Bearer ", ""));
-
-    // const { id } = jwtData;
-    // return {
-    //   headers: req.headers,
-    //   user_id: id
-    // };
+    return {
+      headers: req.headers
+    };
   }
 });
 
