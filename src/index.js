@@ -114,7 +114,7 @@ const resolver = {
       pubSub.publish("createdRT", {
         onCreatedRT: newRT
       });
-      return newBook;
+      return newRT;
     },
 
     async signin(parent, body, context, info) {
